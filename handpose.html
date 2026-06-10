@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detección de Manos - TensorFlow.js Handpose</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0c0a09;
+      --card-bg: rgba(28, 25, 23, 0.75);
+      --border-color: rgba(120, 113, 108, 0.3);
+      --accent: #ff6f00; /* Naranja corporativo de TensorFlow */
+      --accent-gradient: linear-gradient(135deg, #ff6f00 0%, #ff3d00 100%);
+      --text-main: #fafaf9;
+      --text-muted: #a8a29e;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background-image: 
+        radial-gradient(circle at top left, rgba(255, 111, 0, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at bottom right, rgba(255, 61, 0, 0.08) 0%, transparent 40%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    header {
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .main-grid {
+        grid-template-columns: 3fr 2fr;
+      }
+    }
+
+    .canvas-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+    }
+
+    #webcam {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #output_canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 2;
+      transform: scaleX(-1);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 1.25rem;
+      backdrop-filter: blur(8px);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      border-left: 3px solid var(--accent);
+      padding-left: 0.5rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-loading {
+      background: rgba(255, 111, 0, 0.15);
+      color: var(--accent);
+    }
+
+    .status-ready {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .status-error {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      color: var(--text-muted);
+    }
+
+    .info-value {
+      font-weight: 600;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--accent-gradient);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      background: #444;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Consola de debug visible */
+    #debugLog {
+      background: rgba(0,0,0,0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #ff9800;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+  </style>
+
+  <!-- Cargar TensorFlow.js y el modelo Handpose mediante CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@3.11.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@3.11.0/dist/tf-converter.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@3.11.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose@0.0.7/dist/handpose.min.js"></script>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Detección de Manos (TF.js)</h1>
+      <p class="subtitle">TensorFlow.js Handpose Model via CDN</p>
+    </header>
+
+    <div class="main-grid">
+      <!-- Visor -->
+      <div class="canvas-card">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+      </div>
+
+      <!-- Barra Lateral -->
+      <div class="sidebar">
+        <!-- Estado -->
+        <div class="card">
+          <h2>Estado del Sistema</h2>
+          <div class="info-row">
+            <span class="info-label">Modelo:</span>
+            <span class="info-value"><span id="modelStatus" class="status-badge status-loading">Cargando TF.js...</span></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Manos Detectadas:</span>
+            <span class="info-value" id="handsCount">0</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">FPS:</span>
+            <span class="info-value" id="fpsVal">0</span>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="card">
+          <h2>Controles</h2>
+          <button id="webcamButton" class="btn" disabled>Iniciar Cámara</button>
+        </div>
+
+        <!-- Debug -->
+        <div class="card">
+          <h2>Registro de Eventos</h2>
+          <div id="debugLog">Iniciando TensorFlow.js...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("output_canvas");
+    const canvasCtx = canvas.getContext("2d");
+    const modelStatus = document.getElementById("modelStatus");
+    const handsCount = document.getElementById("handsCount");
+    const fpsVal = document.getElementById("fpsVal");
+    const webcamButton = document.getElementById("webcamButton");
+    const debugLog = document.getElementById("debugLog");
+
+    let model = undefined;
+    let lastFrameTime = performance.now();
+    let frameCount = 0;
+
+    // Conexiones de los dedos del modelo Handpose
+    const FINGER_CONNECTIONS = {
+      thumb: [0, 1, 2, 3, 4],
+      indexFinger: [0, 5, 6, 7, 8],
+      middleFinger: [0, 9, 10, 11, 12],
+      ringFinger: [0, 13, 14, 15, 16],
+      pinky: [0, 17, 18, 19, 20]
+    };
+
+    function log(msg) {
+      const p = document.createElement("div");
+      p.innerText = `> ${msg}`;
+      debugLog.appendChild(p);
+      debugLog.scrollTop = debugLog.scrollHeight;
+    }
+
+    // Inicializar modelo Handpose
+    async function init() {
+      try {
+        log("Cargando modelo TensorFlow.js Handpose...");
+        model = await handpose.load();
+
+        modelStatus.className = "status-badge status-ready";
+        modelStatus.innerText = "Listo";
+        log("¡Modelo cargado con éxito!");
+
+        webcamButton.disabled = false;
+        
+        // Auto-activar cámara
+        startCamera();
+      } catch (err) {
+        modelStatus.className = "status-badge status-error";
+        modelStatus.innerText = "Error";
+        log("Error en inicialización: " + err.message);
+      }
+    }
+
+    // Iniciar cámara
+    function startCamera() {
+      log("Solicitando cámara...");
+      
+      const constraints = {
+        video: {
+          width: 640,
+          height: 480,
+          facingMode: "user"
+        }
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then((stream) => {
+          log("Cámara activa.");
+          video.srcObject = stream;
+          video.addEventListener("loadeddata", () => {
+            predict();
+          });
+          webcamButton.innerText = "Detener Cámara";
+        })
+        .catch((err) => {
+          log("ERROR: " + err.message);
+        });
+    }
+
+    function toggleCamera() {
+      if (video.srcObject) {
+        log("Deteniendo cámara...");
+        const tracks = video.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+        webcamButton.innerText = "Iniciar Cámara";
+      } else {
+        startCamera();
+      }
+    }
+
+    webcamButton.addEventListener("click", toggleCamera);
+
+    // Bucle de detección en tiempo real
+    async function predict() {
+      if (!video.srcObject) return;
+
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+
+      const now = performance.now();
+      
+      // FPS
+      frameCount++;
+      if (now >= lastFrameTime + 1000) {
+        fpsVal.innerText = Math.round((frameCount * 1000) / (now - lastFrameTime));
+        frameCount = 0;
+        lastFrameTime = now;
+      }
+
+      // Estimar pose
+      const predictions = await model.estimateHands(video);
+
+      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (predictions && predictions.length > 0) {
+        handsCount.innerText = predictions.length;
+        
+        predictions.forEach(prediction => {
+          drawHand(prediction.landmarks);
+        });
+      } else {
+        handsCount.innerText = "0";
+      }
+
+      if (video.srcObject) {
+        window.requestAnimationFrame(predict);
+      }
+    }
+
+    // Dibujar la mano y el esqueleto
+    function drawHand(landmarks) {
+      canvasCtx.lineWidth = 3;
+      canvasCtx.strokeStyle = "#ff6f00"; // Naranja de TensorFlow
+      canvasCtx.fillStyle = "#ffffff";
+
+      // Dibujar las líneas de cada dedo
+      Object.keys(FINGER_CONNECTIONS).forEach(finger => {
+        const points = FINGER_CONNECTIONS[finger];
+        canvasCtx.beginPath();
+        
+        // Mover al primer punto (muñeca o base)
+        const startPt = landmarks[points[0]];
+        canvasCtx.moveTo(startPt[0], startPt[1]);
+
+        for (let i = 1; i < points.length; i++) {
+          const pt = landmarks[points[i]];
+          canvasCtx.lineTo(pt[0], pt[1]);
+        }
+        canvasCtx.stroke();
+      });
+
+      // Dibujar los puntos de las articulaciones
+      landmarks.forEach(landmark => {
+        canvasCtx.beginPath();
+        canvasCtx.arc(landmark[0], landmark[1], 5, 0, 2 * Math.PI);
+        canvasCtx.fill();
+      });
+    }
+
+    // Iniciar
+    init();
+  </script>
+</body>
+</html>

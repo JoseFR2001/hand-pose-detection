@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detección de Manos - MediaPipe CDN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0c0a09;
+      --card-bg: rgba(28, 25, 23, 0.75);
+      --border-color: rgba(120, 113, 108, 0.3);
+      --accent: #f59e0b;
+      --accent-gradient: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+      --text-main: #fafaf9;
+      --text-muted: #a8a29e;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background-image: 
+        radial-gradient(circle at top left, rgba(245, 158, 11, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at bottom right, rgba(234, 88, 12, 0.08) 0%, transparent 40%);
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    header {
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 768px) {
+      .main-grid {
+        grid-template-columns: 3fr 2fr;
+      }
+    }
+
+    .canvas-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      overflow: hidden;
+      aspect-ratio: 4 / 3;
+      position: relative;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      backdrop-filter: blur(8px);
+    }
+
+    #webcam {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    #output_canvas {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 2;
+      transform: scaleX(-1);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 1.25rem;
+      backdrop-filter: blur(8px);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      border-left: 3px solid var(--accent);
+      padding-left: 0.5rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      border-radius: 50px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .status-loading {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent);
+    }
+
+    .status-ready {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--success);
+    }
+
+    .status-error {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      color: var(--text-muted);
+    }
+
+    .info-value {
+      font-weight: 600;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--accent-gradient);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      background: #444;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* Consola de debug visible */
+    #debugLog {
+      background: rgba(0,0,0,0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 0.75rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Detección de Manos</h1>
+      <p class="subtitle">MediaPipe Hand Landmarker via CDN</p>
+    </header>
+
+    <div class="main-grid">
+      <!-- Visor -->
+      <div class="canvas-card">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+      </div>
+
+      <!-- Barra Lateral -->
+      <div class="sidebar">
+        <!-- Estado -->
+        <div class="card">
+          <h2>Estado del Sistema</h2>
+          <div class="info-row">
+            <span class="info-label">Modelo:</span>
+            <span class="info-value"><span id="modelStatus" class="status-badge status-loading">Cargando modelo...</span></span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Manos Detectadas:</span>
+            <span class="info-value" id="handsCount">0</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">FPS:</span>
+            <span class="info-value" id="fpsVal">0</span>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="card">
+          <h2>Controles</h2>
+          <button id="webcamButton" class="btn" disabled>Iniciar Cámara</button>
+        </div>
+
+        <!-- Debug -->
+        <div class="card">
+          <h2>Registro de Eventos</h2>
+          <div id="debugLog">Iniciando sistema...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/vision_bundle.mjs";
+
+    const video = document.getElementById("webcam");
+    const canvas = document.getElementById("output_canvas");
+    const canvasCtx = canvas.getContext("2d");
+    const modelStatus = document.getElementById("modelStatus");
+    const handsCount = document.getElementById("handsCount");
+    const fpsVal = document.getElementById("fpsVal");
+    const webcamButton = document.getElementById("webcamButton");
+    const debugLog = document.getElementById("debugLog");
+
+    let handLandmarker = undefined;
+    let lastVideoTime = -1;
+    let results = undefined;
+    
+    // FPS tracking
+    let lastFrameTime = performance.now();
+    let frameCount = 0;
+
+    // Conexiones del esqueleto de la mano
+    const HAND_CONNECTIONS = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [9, 10], [10, 11], [11, 12],
+      [13, 14], [14, 15], [15, 16],
+      [0, 17], [17, 18], [18, 19], [19, 20],
+      [5, 9], [9, 13], [13, 17]
+    ];
+
+    function log(msg) {
+      const p = document.createElement("div");
+      p.innerText = `> ${msg}`;
+      debugLog.appendChild(p);
+      debugLog.scrollTop = debugLog.scrollHeight;
+    }
+
+    // Inicializar MediaPipe
+    async function init() {
+      try {
+        log("Cargando FilesetResolver...");
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm"
+        );
+        
+        log("Descargando HandLandmarker Task...");
+        handLandmarker = await HandLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numHands: 2,
+          minHandDetectionConfidence: 0.5,
+          minHandPresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+
+        modelStatus.className = "status-badge status-ready";
+        modelStatus.innerText = "Listo";
+        log("¡Modelo cargado con éxito!");
+
+        webcamButton.disabled = false;
+        
+        // Auto-activar cámara
+        startCamera();
+      } catch (err) {
+        modelStatus.className = "status-badge status-error";
+        modelStatus.innerText = "Error";
+        log("Error en inicialización: " + err.message);
+      }
+    }
+
+    // Activar webcam
+    function startCamera() {
+      log("Solicitando acceso a la cámara...");
+      
+      const constraints = {
+        video: {
+          width: 640,
+          height: 480,
+          facingMode: "user"
+        }
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints)
+        .then((stream) => {
+          log("Acceso concedido a la cámara.");
+          video.srcObject = stream;
+          video.addEventListener("loadeddata", predictWebcam);
+          webcamButton.innerText = "Detener Cámara";
+        })
+        .catch((err) => {
+          log("ERROR de cámara: " + err.name + " - " + err.message);
+          if (err.name === "NotAllowedError") {
+            log("Acceso denegado. Dale permisos en el navegador.");
+          }
+        });
+    }
+
+    function toggleCamera() {
+      if (video.srcObject) {
+        log("Deteniendo cámara...");
+        const tracks = video.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        video.srcObject = null;
+        webcamButton.innerText = "Iniciar Cámara";
+      } else {
+        startCamera();
+      }
+    }
+
+    webcamButton.addEventListener("click", toggleCamera);
+
+    // Bucle de predicción
+    async function predictWebcam() {
+      if (!video.srcObject) return;
+
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+
+      const now = performance.now();
+      
+      // Medición de FPS
+      frameCount++;
+      if (now >= lastFrameTime + 1000) {
+        fpsVal.innerText = Math.round((frameCount * 1000) / (now - lastFrameTime));
+        frameCount = 0;
+        lastFrameTime = now;
+      }
+
+      if (video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        results = handLandmarker.detectForVideo(video, now);
+      }
+
+      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (results && results.landmarks) {
+        handsCount.innerText = results.landmarks.length;
+        for (const landmarks of results.landmarks) {
+          drawSkeleton(landmarks);
+        }
+      } else {
+        handsCount.innerText = "0";
+      }
+
+      if (video.srcObject) {
+        window.requestAnimationFrame(predictWebcam);
+      }
+    }
+
+    function drawSkeleton(landmarks) {
+      canvasCtx.lineWidth = 4;
+      canvasCtx.strokeStyle = "#f59e0b";
+      canvasCtx.fillStyle = "#38bdf8";
+
+      // Conexiones
+      for (const connection of HAND_CONNECTIONS) {
+        const start = landmarks[connection[0]];
+        const end = landmarks[connection[1]];
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(start.x * canvas.width, start.y * canvas.height);
+        canvasCtx.lineTo(end.x * canvas.width, end.y * canvas.height);
+        canvasCtx.stroke();
+      }
+
+      // Nodos
+      for (const landmark of landmarks) {
+        canvasCtx.beginPath();
+        canvasCtx.arc(landmark.x * canvas.width, landmark.y * canvas.height, 5, 0, 2 * Math.PI);
+        canvasCtx.fill();
+      }
+    }
+
+    // Iniciar
+    init();
+  </script>
+</body>
+</html>
