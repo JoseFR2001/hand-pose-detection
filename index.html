@@ -207,6 +207,75 @@
       max-height: 120px;
       overflow-y: auto;
     }
+
+    /* Banner de Advertencia de Baneo */
+    .warning-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(239, 68, 68, 0.45);
+      border: 6px solid var(--error);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      font-size: 1.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease-in-out;
+      animation: pulse-border 1.5s infinite;
+    }
+    
+    .warning-overlay.active {
+      opacity: 1;
+    }
+    
+    @keyframes pulse-border {
+      0% { border-color: rgba(239, 68, 68, 1); }
+      50% { border-color: rgba(239, 68, 68, 0.4); }
+      100% { border-color: rgba(239, 68, 68, 1); }
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+    }
+    
+    .btn-secondary {
+      background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%);
+    }
+
+    .flex-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    
+    .slider-container {
+      margin-top: 0.75rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    
+    .slider-container label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .slider-container input {
+      width: 100%;
+      accent-color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -222,6 +291,10 @@
       <div class="canvas-card">
         <video id="webcam" autoplay playsinline></video>
         <canvas id="output_canvas"></canvas>
+        <div id="warningOverlay" class="warning-overlay">
+          <span>⚠️ POSTURA PROHIBIDA ⚠️</span>
+          <span style="font-size: 1rem; margin-top: 0.5rem; font-weight: 400; background: rgba(0,0,0,0.6); padding: 0.2rem 0.6rem; border-radius: 4px;">Esta postura está baneada</span>
+        </div>
       </div>
 
       <!-- Barra Lateral -->
@@ -246,7 +319,22 @@
         <!-- Acciones -->
         <div class="card">
           <h2>Controles</h2>
-          <button id="webcamButton" class="btn" disabled>Iniciar Cámara</button>
+          <button id="webcamButton" class="btn" style="margin-bottom: 1rem;" disabled>Iniciar Cámara</button>
+          
+          <h2 style="border-left-color: var(--error);">Banear Posturas</h2>
+          <div class="flex-row">
+            <button id="captureButton" class="btn btn-danger" disabled>Capturar Postura</button>
+            <button id="clearButton" class="btn btn-secondary" disabled>Borrar</button>
+          </div>
+          
+          <div class="slider-container">
+            <label><span>Sensibilidad (Umbral):</span><span id="thresholdVal">0.18</span></label>
+            <input type="range" id="thresholdSlider" min="0.05" max="0.4" step="0.01" value="0.18">
+          </div>
+          <div class="info-row" style="margin-top: 0.75rem;">
+            <span class="info-label">Postura Guardada:</span>
+            <span class="info-value" id="savedStatus" style="color: var(--text-muted);">Ninguna</span>
+          </div>
         </div>
 
         <!-- Debug -->
@@ -270,9 +358,21 @@
     const webcamButton = document.getElementById("webcamButton");
     const debugLog = document.getElementById("debugLog");
 
+    // Nuevos elementos UI para baneo
+    const captureButton = document.getElementById("captureButton");
+    const clearButton = document.getElementById("clearButton");
+    const thresholdSlider = document.getElementById("thresholdSlider");
+    const thresholdVal = document.getElementById("thresholdVal");
+    const savedStatus = document.getElementById("savedStatus");
+    const warningOverlay = document.getElementById("warningOverlay");
+
     let handLandmarker = undefined;
     let lastVideoTime = -1;
     let results = undefined;
+
+    // Configuración de postura prohibida
+    let bannedPosture = null; 
+    let matchThreshold = 0.18;
     
     // FPS tracking
     let lastFrameTime = performance.now();
@@ -398,13 +498,35 @@
 
       canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (results && results.landmarks) {
+      let bannedPostureDetected = false;
+      const hasHands = results && results.landmarks && results.landmarks.length > 0;
+      captureButton.disabled = !hasHands;
+
+      if (hasHands) {
         handsCount.innerText = results.landmarks.length;
         for (const landmarks of results.landmarks) {
           drawSkeleton(landmarks);
+          
+          if (bannedPosture) {
+            const currentNorm = normalizeLandmarks(landmarks);
+            // Comparamos versión directa y versión reflejada horizontalmente
+            const distDirect = getPostureDistance(currentNorm, bannedPosture, false);
+            const distMirror = getPostureDistance(currentNorm, bannedPosture, true);
+            const minDist = Math.min(distDirect, distMirror);
+            
+            if (minDist < matchThreshold) {
+              bannedPostureDetected = true;
+            }
+          }
         }
       } else {
         handsCount.innerText = "0";
+      }
+
+      if (bannedPostureDetected) {
+        warningOverlay.classList.add("active");
+      } else {
+        warningOverlay.classList.remove("active");
       }
 
       if (video.srcObject) {
@@ -434,6 +556,60 @@
         canvasCtx.fill();
       }
     }
+
+    // Funciones de normalización y comparación para baneo de gestos
+    function normalizeLandmarks(landmarks) {
+      const wrist = landmarks[0];
+      const reference = landmarks[9]; // Middle finger MCP como referencia de escala
+      const dx = reference.x - wrist.x;
+      const dy = reference.y - wrist.y;
+      const scale = Math.sqrt(dx * dx + dy * dy) || 1.0;
+      
+      return landmarks.map(pt => ({
+        x: (pt.x - wrist.x) / scale,
+        y: (pt.y - wrist.y) / scale
+      }));
+    }
+
+    function getPostureDistance(l1, l2, mirror = false) {
+      let sum = 0;
+      for (let i = 0; i < 21; i++) {
+        const x1 = mirror ? -l1[i].x : l1[i].x;
+        const y1 = l1[i].y;
+        const dx = x1 - l2[i].x;
+        const dy = y1 - l2[i].y;
+        sum += Math.sqrt(dx * dx + dy * dy);
+      }
+      return sum / 21;
+    }
+
+    // Eventos para baneo de postura
+    captureButton.addEventListener("click", () => {
+      if (results && results.landmarks && results.landmarks.length > 0) {
+        // Guardar la postura normalizada del primer mano detectada
+        bannedPosture = normalizeLandmarks(results.landmarks[0]);
+        savedStatus.innerText = "Registrada ✅";
+        savedStatus.style.color = "var(--success)";
+        clearButton.disabled = false;
+        log("Postura capturada y baneada con éxito.");
+      } else {
+        log("No se detecta ninguna mano para capturar.");
+      }
+    });
+
+    clearButton.addEventListener("click", () => {
+      bannedPosture = null;
+      savedStatus.innerText = "Ninguna";
+      savedStatus.style.color = "var(--text-muted)";
+      clearButton.disabled = true;
+      warningOverlay.classList.remove("active");
+      log("Postura baneada borrada.");
+    });
+
+    thresholdSlider.addEventListener("input", (e) => {
+      matchThreshold = parseFloat(e.target.value);
+      thresholdVal.innerText = matchThreshold.toFixed(2);
+    });
 
     // Iniciar
     init();
