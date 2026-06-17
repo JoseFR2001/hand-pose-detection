@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HandPose AI - Dashboard de Detección de Manos</title>
+
+  <!-- Import Google Fonts for professional typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <!-- Load MediaPipe Hands library globally from local assets to avoid bundler & offline issues -->
+  <script src="/mediapipe/hands.js"></script>
+
+  <!-- Load legacy TensorFlow.js and Handpose model globally from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose/dist/handpose.min.js"></script>
+</head>
+
+<body>
+  <div id="app" class="dashboard-container">
+
+    <!-- Top Navigation & Header -->
+    <header class="dashboard-header">
+      <div class="header-left">
+        <div class="logo-area">
+          <span class="logo-dot"></span>
+          <h1>HandPose <span class="accent-text">AI</span></h1>
+        </div>
+        <p class="subtitle">Seminario de Actualización TSDSM</p>
+      </div>
+
+      <!-- Client-side Routing Navigation Tab -->
+      <nav class="header-nav">
+        <a href="#/modern" class="nav-link active" id="nav-modern">
+          <span class="nav-icon">🚀</span> MediaPipe Hands (Moderna)
+        </a>
+        <a href="#/legacy" class="nav-link" id="nav-legacy">
+          <span class="nav-icon">🐢</span> TF.js Handpose (Legado)
+        </a>
+      </nav>
+
+      <div class="header-right">
+        <!-- Status Badge for Modern Model -->
+        <div class="status-badge" id="model-status-badge">
+          <span class="badge-dot pulse-red" id="status-dot"></span>
+          <span id="status-text">Inicializando MediaPipe...</span>
+        </div>
+        <!-- Status Badge for Legacy Model -->
+        <div class="status-badge" id="model-status-badge-legacy" style="display: none;">
+          <span class="badge-dot pulse-red" id="status-dot-legacy"></span>
+          <span id="status-text-legacy">Inicializando TF.js...</span>
+        </div>
+        <div class="university-tag">IPF 2026</div>
+      </div>
+    </header>
+
+    <!-- Main Layout: Wrapper for Route views -->
+    <main class="dashboard-main-wrapper">
+
+      <!-- PAGE VIEW 1: MODERN MODEL (MediaPipe Hands) -->
+      <div id="page-modern" class="page-view active-page">
+        <div class="dashboard-main">
+          <!-- Sidebar Controls & Metrics -->
+          <aside class="dashboard-sidebar">
+
+            <!-- Control Panel Card -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <h2>Panel de Control (MediaPipe)</h2>
+              </div>
+              <div class="card-body">
+                <!-- Camera Switch -->
+                <div class="control-group">
+                  <label>Entrada de Video</label>
+                  <button id="btn-toggle-camera" class="btn btn-primary">
+                    <span class="btn-icon">📹</span>
+                    <span id="btn-camera-text">Activar Cámara</span>
+                  </button>
+                </div>
+                <!-- Camera Selector -->
+                <div class="control-group" id="camera-select-group" style="display: none;">
+                  <label for="camera-select">Seleccionar Dispositivo</label>
+                  <select id="camera-select" class="custom-select"></select>
+                </div>
+                <!-- Model Adjustments -->
+                <div class="control-group">
+                  <label for="max-hands">Máximo de Manos: <span id="val-max-hands"
+                      class="value-highlight">2</span></label>
+                  <input type="range" id="max-hands" min="1" max="4" value="2" step="1" class="custom-slider">
+                </div>
+                <div class="control-group">
+                  <label for="min-confidence">Confianza Mínima: <span id="val-confidence"
+                      class="value-highlight">65%</span></label>
+                  <input type="range" id="min-confidence" min="0.1" max="0.9" value="0.65" step="0.05"
+                    class="custom-slider">
+                </div>
+              </div>
+            </div>
+
+            <!-- Forbidden Pose Control Card -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon text-red" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <h2>Postura Prohibida</h2>
+              </div>
+              <div class="card-body">
+                <div class="pose-status-area">
+                  <span class="status-label">Estado:</span>
+                  <span id="pose-registered-status" class="pose-status-badge unregistered">Sin Registrar</span>
+                </div>
+                <div class="btn-group-row">
+                  <button id="btn-capture-pose" class="btn btn-secondary btn-half">
+                    <span>📸 Registrar</span>
+                  </button>
+                  <button id="btn-clear-pose" class="btn btn-danger-outline btn-half" disabled>
+                    <span>🗑️ Borrar</span>
+                  </button>
+                </div>
+                <div class="control-group" style="margin-top: 15px;">
+                  <label for="match-threshold">Sensibilidad: <span id="val-match-threshold"
+                      class="value-highlight">85%</span></label>
+                  <input type="range" id="match-threshold" min="70" max="98" value="85" step="1"
+                    class="custom-slider slider-red">
+                </div>
+                <div class="similarity-bar-container">
+                  <div class="similarity-bar-header">
+                    <span>Similitud de Pose:</span>
+                    <span id="val-current-similarity" class="similarity-value">0%</span>
+                  </div>
+                  <div class="progress-bar-track">
+                    <div id="similarity-progress" class="progress-bar-fill" style="width: 0%;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Metrics Card -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="14" />
+                </svg>
+                <h2>Métricas de Rendimiento</h2>
+              </div>
+              <div class="card-body grid-metrics">
+                <div class="metric-box">
+                  <span class="metric-label">FPS</span>
+                  <span class="metric-value text-cyan" id="metric-fps">0</span>
+                </div>
+                <div class="metric-box">
+                  <span class="metric-label">Latencia</span>
+                  <span class="metric-value text-purple" id="metric-latency">0 ms</span>
+                </div>
+                <div class="metric-box full-width">
+                  <span class="metric-label">Manos Detectadas</span>
+                  <span class="metric-value text-green" id="metric-hands-count">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Coding Legend -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+                <h2>Guía de Articulaciones</h2>
+              </div>
+              <div class="card-body legend-body">
+                <div class="legend-grid">
+                  <div class="legend-item"><span class="color-dot bg-wrist"></span>Muñeca</div>
+                  <div class="legend-item"><span class="color-dot bg-thumb"></span>Pulgar</div>
+                  <div class="legend-item"><span class="color-dot bg-index"></span>Índice</div>
+                  <div class="legend-item"><span class="color-dot bg-middle"></span>Mayor</div>
+                  <div class="legend-item"><span class="color-dot bg-ring"></span>Anular</div>
+                  <div class="legend-item"><span class="color-dot bg-pinky"></span>Meñique</div>
+                </div>
+              </div>
+            </div>
+
+          </aside>
+
+          <!-- View Screen / Canvas -->
+          <section class="dashboard-viewport">
+            <div class="viewport-container glass-card">
+              <video id="webcam" autoplay playsinline muted style="display: none;"></video>
+              <canvas id="output-canvas" width="640" height="480"></canvas>
+
+              <!-- Loading overlay -->
+              <div class="viewport-overlay active" id="viewport-loading">
+                <div class="spinner"></div>
+                <p class="loading-title">Cargando Entorno MediaPipe</p>
+                <p class="loading-subtitle" id="loading-detail-text">Inicializando lógica local de mallas de manos...
+                </p>
+              </div>
+
+              <!-- Idle overlay -->
+              <div class="viewport-overlay" id="viewport-idle">
+                <div class="camera-icon-wrapper">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </div>
+                <p class="idle-title">Cámara Desactivada</p>
+                <p class="idle-subtitle">Presiona "Activar Cámara" para iniciar la detección con MediaPipe.</p>
+              </div>
+
+              <!-- Alert Overlay for Forbidden Pose -->
+              <div class="alert-overlay" id="alert-banner">
+                <div class="alert-content">
+                  <span class="alert-flash-icon">⚠️</span>
+                  <h2>¡POSTURA PROHIBIDA DETECTADA!</h2>
+                  <p>Las articulaciones de la mano coinciden con el registro de seguridad</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- PAGE VIEW 2: LEGACY MODEL (TF.js Handpose) -->
+      <div id="page-legacy" class="page-view">
+        <div class="dashboard-main">
+          <!-- Sidebar Controls & Metrics -->
+          <aside class="dashboard-sidebar">
+
+            <!-- Control Panel Card -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <h2>Panel de Control (TF.js Legacy)</h2>
+              </div>
+              <div class="card-body">
+                <!-- Camera Switch -->
+                <div class="control-group">
+                  <label>Entrada de Video</label>
+                  <button id="btn-toggle-camera-legacy" class="btn btn-primary">
+                    <span class="btn-icon">📹</span>
+                    <span id="btn-camera-text-legacy">Activar Cámara</span>
+                  </button>
+                </div>
+                <!-- Camera Selector -->
+                <div class="control-group" id="camera-select-group-legacy" style="display: none;">
+                  <label for="camera-select-legacy">Seleccionar Dispositivo</label>
+                  <select id="camera-select-legacy" class="custom-select"></select>
+                </div>
+                <!-- Model Adjustments -->
+                <div class="control-group">
+                  <label for="min-confidence-legacy">Filtro de Detección: <span id="val-confidence-legacy"
+                      class="value-highlight">75%</span></label>
+                  <input type="range" id="min-confidence-legacy" min="0.4" max="0.95" value="0.75" step="0.05"
+                    class="custom-slider">
+                </div>
+                <div class="alert-info-box">
+                  <span>⚠️ Nota: El modelo Handpose original de TF.js está limitado internamente a rastrear **una sola
+                    mano** a la vez.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Metrics Card -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="20" x2="18" y2="10" />
+                  <line x1="12" y1="20" x2="12" y2="4" />
+                  <line x1="6" y1="20" x2="6" y2="14" />
+                </svg>
+                <h2>Métricas (TF.js Legacy)</h2>
+              </div>
+              <div class="card-body grid-metrics">
+                <div class="metric-box">
+                  <span class="metric-label">FPS</span>
+                  <span class="metric-value text-cyan" id="metric-fps-legacy">0</span>
+                </div>
+                <div class="metric-box">
+                  <span class="metric-label">Latencia</span>
+                  <span class="metric-value text-purple" id="metric-latency-legacy">0 ms</span>
+                </div>
+                <div class="metric-box full-width">
+                  <span class="metric-label">Manos Detectadas</span>
+                  <span class="metric-value text-green" id="metric-hands-count-legacy">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Color Coding Legend -->
+            <div class="card glass-card">
+              <div class="card-header">
+                <svg xmlns="http://www.w3.org/2000/svg" class="card-icon" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+                <h2>Guía de Articulaciones</h2>
+              </div>
+              <div class="card-body legend-body">
+                <div class="legend-grid">
+                  <div class="legend-item"><span class="color-dot bg-wrist"></span>Muñeca</div>
+                  <div class="legend-item"><span class="color-dot bg-thumb"></span>Pulgar</div>
+                  <div class="legend-item"><span class="color-dot bg-index"></span>Índice</div>
+                  <div class="legend-item"><span class="color-dot bg-middle"></span>Mayor</div>
+                  <div class="legend-item"><span class="color-dot bg-ring"></span>Anular</div>
+                  <div class="legend-item"><span class="color-dot bg-pinky"></span>Meñique</div>
+                </div>
+              </div>
+            </div>
+
+          </aside>
+
+          <!-- View Screen / Canvas -->
+          <section class="dashboard-viewport">
+            <div class="viewport-container glass-card">
+              <video id="webcam-legacy" autoplay playsinline muted style="display: none;"></video>
+              <canvas id="output-canvas-legacy" width="640" height="480"></canvas>
+
+              <!-- Loading overlay -->
+              <div class="viewport-overlay active" id="viewport-loading-legacy">
+                <div class="spinner"></div>
+                <p class="loading-title">Cargando Modelo TF.js Legacy</p>
+                <p class="loading-subtitle" id="loading-detail-text-legacy">Descargando pesos de Handpose original de
+                  TensorFlow.js...</p>
+              </div>
+
+              <!-- Idle overlay -->
+              <div class="viewport-overlay" id="viewport-idle-legacy">
+                <div class="camera-icon-wrapper">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </div>
+                <p class="idle-title">Cámara Desactivada</p>
+                <p class="idle-subtitle">Presiona "Activar Cámara" para iniciar la detección con el modelo legacy de
+                  TF.js.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Bottom Panel: Presentation Slides -->
+    <footer class="dashboard-footer">
+      <div class="presentation-deck glass-card">
+        <!-- Navigation Tabs -->
+        <nav class="deck-tabs">
+          <button class="tab-link active" data-tab="tab-intro">Inicio</button>
+          <button class="tab-link" data-tab="tab-objetivo">1. Objetivo</button>
+          <button class="tab-link" data-tab="tab-desarrollo">2. Desarrollo & Datos</button>
+          <button class="tab-link" data-tab="tab-funcionamiento">3. Estructura</button>
+          <button class="tab-link" data-tab="tab-aplicaciones">4. Aplicaciones</button>
+          <button class="tab-link" data-tab="tab-dificultades">5. Dificultades</button>
+          <button class="tab-link" data-tab="tab-futuro">6. Estado Actual</button>
+          <button class="tab-link" data-tab="tab-prohibido">7. Postura Prohibida (Extra)</button>
+        </nav>
+
+        <!-- Tab Content Sections -->
+        <div class="deck-content">
+
+          <!-- Slide Intro -->
+          <div class="tab-pane active" id="tab-intro">
+            <div class="slide-intro-grid">
+              <div class="intro-left">
+                <div class="expositor-badge">PROYECTO DE INVESTIGACIÓN</div>
+                <h2>Detección de Poses de Manos</h2>
+                <p class="intro-p">
+                  Presentación interactiva para el examen del segundo parcial de <strong>Seminario de
+                    Actualización</strong>.
+                  Este sistema ejecuta una red neuronal profunda directamente en el navegador del usuario final,
+                  analizando imágenes de video a 30+ fotogramas por segundo para localizar de manera tridimensional las
+                  articulaciones de la mano.
+                </p>
+                <div class="members-box">
+                  <strong>Desarrollado por:</strong>
+                  <span>Mendoza José F. R., Miño Presentado S., Rodríguez Gonzalo L.</span>
+                </div>
+              </div>
+              <div class="intro-right">
+                <div class="hand-mesh-graphic">
+                  <div class="circle-node pulse-cyan" style="top: 20%; left: 35%;">4</div>
+                  <div class="circle-node pulse-purple" style="top: 40%; left: 50%;">8</div>
+                  <div class="circle-node pulse-green" style="top: 55%; left: 65%;">12</div>
+                  <div class="circle-node pulse-yellow" style="top: 65%; left: 78%;">16</div>
+                  <div class="circle-node pulse-red" style="top: 80%; left: 90%;">20</div>
+                  <svg viewBox="0 0 100 100" class="graphic-svg">
+                    <path d="M10,80 L35,20 M10,80 L50,40 M10,80 L65,55 M10,80 L78,65 M10,80 L90,80"
+                      stroke="rgba(255,255,255,0.15)" stroke-width="1.5" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 1. Objetivo -->
+          <div class="tab-pane" id="tab-objetivo">
+            <h2>¿Cuál es el objetivo de este modelo?</h2>
+            <p class="slide-text">
+              El objetivo principal del modelo <strong>MediaPipe Hands (Hand Pose Detection)</strong> es la predicción
+              en tiempo real de la estructura esquelética de la mano humana a partir de un flujo de video estándar en 2D
+              (cámara web convencional), sin necesidad de sensores de profundidad costosos.
+            </p>
+            <div class="grid-2-col">
+              <div class="bullet-card">
+                <h3>Localización Fina</h3>
+                <p>Mapea con precisión milimétrica la posición tridimensional (ejes X, Y y una profundidad Z estimada)
+                  de 21 articulaciones (keypoints) individuales en cada mano.</p>
+              </div>
+              <div class="bullet-card">
+                <h3>Soporte Multimano</h3>
+                <p>Es capaz de rastrear múltiples manos simultáneamente de forma independiente, separando las
+                  articulaciones de la mano izquierda de la mano derecha.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 2. Desarrollo & Datos -->
+          <div class="tab-pane" id="tab-desarrollo">
+            <h2>¿Quiénes lo desarrollaron y con qué datos?</h2>
+            <div class="grid-2-col">
+              <div>
+                <h3>Desarrolladores</h3>
+                <p class="slide-text">
+                  El modelo fue diseñado y publicado por el departamento de <strong>Google AI / Research</strong>, y
+                  forma parte del framework abierto **MediaPipe**, el cual busca acercar soluciones complejas de visión
+                  artificial a dispositivos móviles y navegadores web con baja latencia.
+                </p>
+              </div>
+              <div>
+                <h3>Datos de Entrenamiento</h3>
+                <p class="slide-text">
+                  Fue entrenado utilizando un gran dataset mixto que incluye:
+                </p>
+                <ul class="slide-list">
+                  <li>Alrededor de <strong>30,000 imágenes reales</strong> capturadas bajo diversas condiciones de
+                    iluminación y fondos, etiquetadas manualmente con coordenadas 2D.</li>
+                  <li>Un <strong>modelo sintético 3D de alta fidelidad</strong> para generar poses de manos artificiales
+                    sobre fondos variables, lo que permitió dotar al modelo de la capacidad de inferir coordenadas Z de
+                    profundidad.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 3. Estructura y Funcionamiento -->
+          <div class="tab-pane" id="tab-funcionamiento">
+            <h2>Estructura del Modelo y Funcionamiento</h2>
+            <p class="slide-text">
+              El sistema utiliza una arquitectura segmentada en dos etapas secuenciales (pipeline) para ahorrar poder de
+              cómputo:
+            </p>
+            <div class="pipeline-container">
+              <div class="pipeline-step">
+                <div class="step-num">1</div>
+                <h4>Detector de Palmas (BlazePalm)</h4>
+                <p>Una red neuronal liviana optimizada para móviles escanea toda la imagen en busca de la presencia de
+                  manos (caja delimitadora). Al buscar solo palmas en vez de dedos completos, reduce drásticamente el
+                  espacio de búsqueda.</p>
+              </div>
+              <div class="pipeline-step-arrow">➡️</div>
+              <div class="pipeline-step">
+                <div class="step-num">2</div>
+                <h4>Modelo de Puntos Clave (Hand Landmark Model)</h4>
+                <p>Una vez recortada la región de la palma, esta segunda red predice la ubicación tridimensional de los
+                  21 puntos clave mediante regresión directa. En fotogramas sucesivos, esta red hace un autoseguimiento
+                  basándose en el cuadro anterior, evitando volver a ejecutar el detector BlazePalm continuamente.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 4. Aplicaciones -->
+          <div class="tab-pane" id="tab-aplicaciones">
+            <h2>Aplicaciones en la Vida Real</h2>
+            <div class="grid-3-col">
+              <div class="app-card">
+                <span class="app-card-icon">🤟</span>
+                <h4>Traducción de Lengua de Señas</h4>
+                <p>Sistemas automatizados de interpretación que asocian la secuencia de puntos de la mano con palabras o
+                  letras del abecedario dactilológico.</p>
+              </div>
+              <div class="app-card">
+                <span class="app-card-icon">🎮</span>
+                <h4>Interactividad sin Contacto</h4>
+                <p>Navegar por interfaces web, controlar volumen, o jugar en dispositivos inteligentes sin tocar la
+                  pantalla física (ideal en medicina u hostelería).</p>
+              </div>
+              <div class="app-card">
+                <span class="app-card-icon">🕶️</span>
+                <h4>Realidad Virtual (XR/VR)</h4>
+                <p>Control e interacción fluida en entornos tridimensionales inmersivos (como las Oculus Quest o Apple
+                  Vision Pro) usando las propias manos del usuario.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 5. Dificultades -->
+          <div class="tab-pane" id="tab-dificultades">
+            <h2>Dificultades al Hacerlo Funcionar</h2>
+            <div class="bullet-card warning-accent">
+              <h3>⚠️ Desafíos Técnicos Superados</h3>
+              <ul class="slide-list">
+                <li><strong>Oclusiones Propias:</strong> Cuando un dedo pasa detrás de otro o de la palma, el modelo
+                  pierde visibilidad. Se resuelve parcialmente gracias al entrenamiento sintético 3D que "estima" la
+                  pose oculta.</li>
+                <li><strong>Empaquetamiento y CORS (Vite/Rollup):</strong> Importar localmente los ficheros binarios
+                  `.wasm` de MediaPipe en un entorno modular suele generar errores de rutas en producción. Se solucionó
+                  configurando la carga a través de la carpeta local pública (`/mediapipe/`).</li>
+                <li><strong>Espejado del Video:</strong> El usuario se siente más cómodo viéndose como en un espejo, por
+                  lo que fue necesario implementar una transformación de escala horizontal invertida al dibujar las
+                  frames sobre el canvas, y sincronizar esta inversión con el predictor de TensorFlow.</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Slide 6. Estado Actual -->
+          <div class="tab-pane" id="tab-futuro">
+            <h2>Análisis Teórico: Estado Actual de los Modelos</h2>
+            <div class="grid-2-col">
+              <div class="bullet-card">
+                <h3>¿Siguen vigentes estos modelos?</h3>
+                <p><strong>Sí.</strong> Modelos como **MediaPipe Hands** son el estándar actual de la industria para
+                  ejecutar Inteligencia Artificial directamente en el navegador del cliente (Edge AI), ya que su
+                  ligereza permite ejecutarlos sin GPU dedicada en computadoras estándar y celulares con baja latencia.
+                </p>
+              </div>
+              <div class="bullet-card">
+                <h3>Enfoques modernos: Vision Transformers</h3>
+                <p><strong>Reemplazo:</strong> La investigación actual se está moviendo hacia **Vision Transformers
+                  (ViT)** (ej. ViTPose o RT-DETR) y arquitecturas multi-persona de un solo paso que detectan el cuerpo,
+                  rostro y manos simultáneamente. Estos son más precisos frente a deformaciones complejas, pero
+                  requieren de mayor poder de cómputo en comparación con el detector BlazePalm.</p>
+              </div>
+              <div class="bullet-card full-width" style="grid-column: span 2; margin-top: 5px;">
+                <h3>Avances de Vanguardia: Reconstrucción 3D y Hardware XR</h3>
+                <p>Actualmente se está logrando reconstruir la **malla tridimensional completa de la mano (mallas de 778
+                  vértices)** para estimar volumen y textura, y no solo los 21 puntos. A nivel hardware, cascos de
+                  realidad extendida como las Apple Vision Pro o Meta Quest 3 integran coprocesadores NPU de bajo
+                  consumo específicos para el tracking sub-milimétrico de manos a 90Hz de frecuencia.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Slide 7. Postura Prohibida -->
+          <div class="tab-pane" id="tab-prohibido">
+            <h2>Funcionalidad Extra: Postura Prohibida en Tiempo Real</h2>
+            <div class="grid-2-col">
+              <div>
+                <h3>Algoritmo de Normalización</h3>
+                <p class="slide-text">
+                  Para lograr una comparación independiente del tamaño de la mano o su posición en pantalla, la pose
+                  capturada se procesa matemáticamente:
+                </p>
+                <ul class="slide-list">
+                  <li><strong>Traslación al Origen:</strong> Se resta el punto de la muñeca (punto 0) a los 21 landmarks
+                    de la mano, colocando la muñeca en la coordenada (0, 0, 0).</li>
+                  <li><strong>Escalado Unitario:</strong> Se dividen las coordenadas de los 21 puntos por la distancia
+                    máxima entre la muñeca y cualquiera de los dedos. Esto escala la pose de la mano de forma uniforme
+                    en una esfera de radio 1.</li>
+                </ul>
+              </div>
+              <div>
+                <h3>Comparación Espejada y Similitud</h3>
+                <p class="slide-text">
+                  La comparación se realiza calculando la **distancia euclidiana promedio** de los 21 puntos.
+                </p>
+                <ul class="slide-list">
+                  <li><strong>Detección Espejada:</strong> Se compara la mano del video tanto con la postura guardada
+                    como con una versión invertida horizontalmente (invirtiendo el signo de X). Esto permite reconocer
+                    la pose sin importar cuál mano se use.</li>
+                  <li><strong>Sensibilidad Ajustable:</strong> Un slider de coincidencia (umbral) permite regular qué
+                    tan precisa debe ser la coincidencia de los dedos para disparar la advertencia visual roja.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
